@@ -548,8 +548,6 @@
       <div class="dot" data-target="8"></div>
     </div>
 
-    <audio id="song1" src="song1.mp3" loop preload="auto"></audio>
-    <audio id="song2" src="song2.mp3" loop preload="auto"></audio>
     <audio id="song3" src="song3.mp3" loop preload="auto"></audio>
   </div>
 
@@ -569,63 +567,38 @@
       fireflyLayer.appendChild(f);
     }
 
-    // ---------- audio crossfade engine ----------
-    const songs = {
-      1: document.getElementById('song1'),
-      2: document.getElementById('song2'),
-      3: document.getElementById('song3')
-    };
-    Object.values(songs).forEach(a => a.volume = 0);
-
-    // target volumes [song1, song2, song3] per page number
-    const volumeMap = {
-      1: [0, 0, 1],
-      2: [0, 0, 1],
-      3: [0, 0, 1],
-      4: [0, 0, 1],
-      5: [0, 0, 1],
-      6: [0, 0, 1],
-      7: [0, 0, 1],
-      8: [0, 0, 1]
-    };
+    // ---------- audio (una sola canción, de página 1 a 8) ----------
+    const song = document.getElementById('song3');
+    song.volume = 0;
 
     let fadeRAF = null;
     let masterMuted = false;
 
-    function fadeTo(targets) {
+    function fadeTo(target) {
       if (fadeRAF) cancelAnimationFrame(fadeRAF);
-      const duration = 2200;
+      const duration = 1800;
       const start = performance.now();
-      const startVols = [songs[1].volume, songs[2].volume, songs[3].volume];
+      const startVol = song.volume;
+      const effectiveTarget = masterMuted ? 0 : target;
 
-      // ensure playing if it will have volume
-      [1, 2, 3].forEach((k, idx) => {
-        if (targets[idx] > 0 && songs[k].paused) {
-          songs[k].play().catch(() => { });
-        }
-      });
+      if (effectiveTarget > 0 && song.paused) {
+        song.play().catch(() => { });
+      }
 
       function step(now) {
         const t = Math.min(1, (now - start) / duration);
         const eased = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease-in-out
-        [1, 2, 3].forEach((k, idx) => {
-          const v = startVols[idx] + (targets[idx] - startVols[idx]) * eased;
-          songs[k].volume = masterMuted ? 0 : Math.max(0, Math.min(1, v));
-        });
+        song.volume = Math.max(0, Math.min(1, startVol + (effectiveTarget - startVol) * eased));
         if (t < 1) {
           fadeRAF = requestAnimationFrame(step);
-        } else {
-          [1, 2, 3].forEach((k, idx) => {
-            if (targets[idx] === 0 && !songs[k].paused) {
-              songs[k].pause();
-            }
-          });
+        } else if (effectiveTarget === 0 && !song.paused) {
+          song.pause();
         }
       }
       fadeRAF = requestAnimationFrame(step);
     }
 
-    // ---------- scroll infinito: detectar en qué página estoy ----------
+    // ---------- scroll infinito: detectar en qué página estoy (solo para el indicador) ----------
     const TOTAL_PAGES = 8;
     let currentPage = 1;
     const letterEl = document.getElementById('letter');
@@ -637,7 +610,7 @@
       if (n === currentPage) return;
       currentPage = n;
       dots.forEach(d => d.classList.toggle('active', Number(d.dataset.target) === n));
-      fadeTo(volumeMap[n]);
+      // la música suena continua de la página 1 a la 8, no se recalcula por página
     }
 
     // aparición suave del texto al entrar en pantalla
@@ -651,15 +624,15 @@
     }, { threshold: 0.2 });
     sections.forEach(s => revealObserver.observe(s));
 
-    // qué página está más visible ahora mismo -> controla la música
-    const musicObserver = new IntersectionObserver((entries) => {
+    // qué página está más visible ahora mismo -> solo mueve el indicador de puntos
+    const pageObserver = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
           setCurrentPage(Number(entry.target.dataset.page));
         }
       });
     }, { threshold: [0.5] });
-    sections.forEach(s => musicObserver.observe(s));
+    sections.forEach(s => pageObserver.observe(s));
 
     dots.forEach(dot => {
       dot.addEventListener('click', () => {
@@ -683,15 +656,13 @@
     soundToggle.addEventListener('click', () => {
       masterMuted = !masterMuted;
       soundToggle.textContent = masterMuted ? '🔇' : '🔈';
-      fadeTo(volumeMap[currentPage]);
+      fadeTo(1);
     });
 
     // ---------- entrance ----------
     document.getElementById('enterBtn').addEventListener('click', () => {
-      // prime all audio elements under this user gesture
-      [songs[1], songs[2], songs[3]].forEach(a => {
-        a.play().then(() => a.pause()).catch(() => { });
-      });
+      // prime el audio bajo este gesto del usuario
+      song.play().then(() => song.pause()).catch(() => { });
 
       document.getElementById('cover').classList.add('hidden');
       setTimeout(() => {
@@ -699,7 +670,7 @@
         document.getElementById('dots').classList.add('show');
         soundToggle.classList.add('show');
         dots[0].classList.add('active');
-        fadeTo(volumeMap[1]);
+        fadeTo(1);
       }, 900);
     });
   </script>
